@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<meta name="referrer" content="strict-origin-when-cross-origin" />
+<title>Billing Dashboard</title>
+<style>
+/* GitHub Pages で平文のまま置く唯一のページ（BD-070）。ここにはデータも PJ 名も書かない。
+   色の値は templates/index.html の :root と同値（tests/test_pages.py がミラーを検査する）。 */
+:root{
+  color-scheme:light dark;
+  --font-body:"BIZ UDPGothic","BIZ UDPゴシック","Noto Sans JP","Hiragino Sans",Meiryo,sans-serif;
+  --font-mono:"BIZ UDGothic","BIZ UDゴシック","Cascadia Mono",Consolas,monospace;
+  --c-primary:#2b3036; --c-chip-active-bg:#2b3036; --c-chip-active-fg:#ffffff; --c-red:#a83232;
+  --c-text:#1e1f1c; --c-muted:#5e6059; --c-border:#dcdfe1; --c-border-strong:#7b8288;
+  --c-bg:#f3f4f4; --c-soft:#fafafa; --c-code-bg:#eceeef;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --c-primary:#d5d9dd; --c-chip-active-bg:#d5d9dd; --c-chip-active-fg:#11151a; --c-red:#e88;
+    --c-text:#e4e7ea; --c-muted:#a8adb3; --c-border:#2c3339; --c-border-strong:#8a9298;
+    --c-bg:#11151a; --c-soft:#1a1f25; --c-code-bg:#232930;
+  }
+  .lk-card{border-color:var(--c-border-strong)}
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-body);color:var(--c-text);background:var(--c-bg);line-height:1.6;font-size:14px}
+#boot{position:fixed;inset:0;display:grid;place-items:center;color:var(--c-muted);font-size:13px}
+#lock{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:16px}
+#lock[hidden],#boot[hidden]{display:none}
+.lk-card{width:min(420px,100%);background:var(--c-soft);border:1px solid var(--c-border);border-radius:16px;padding:28px 26px 22px;box-shadow:0 2px 6px rgba(0,0,0,.06),0 18px 40px rgba(0,0,0,.10)}
+.lk-gauge{display:block;width:76px;height:42px;margin:0 0 14px}
+.lk-card h1{font-size:23px;margin:0 0 6px;letter-spacing:.01em}
+.lk-lead{font-size:13px;line-height:1.75;color:var(--c-muted);margin:0 0 20px}
+.lk-card label[for]{display:block;font-size:12.5px;font-weight:600;margin:0 0 6px}
+#lock-pass{width:100%;min-height:46px;border:1px solid var(--c-border-strong);border-radius:8px;background:var(--c-bg);color:var(--c-text);padding:8px 12px;font-family:var(--font-mono);font-size:15px}
+#lock-pass[aria-invalid="true"]{border-color:var(--c-red);border-width:2px}
+.lk-rem{display:flex;align-items:center;gap:8px;min-height:44px;font-size:13px;margin:6px 0 0;cursor:pointer}
+.lk-rem input{width:18px;height:18px;margin:0;accent-color:var(--c-primary)}
+.lk-note{font-size:12px;color:var(--c-muted);margin:0 0 12px 26px}
+#lock-go{width:100%;min-height:46px;border:none;border-radius:8px;background:var(--c-chip-active-bg);color:var(--c-chip-active-fg);font:inherit;font-size:15px;font-weight:700;cursor:pointer}
+#lock-go:disabled{opacity:.65;cursor:progress}
+#lock-retry{display:none;width:100%;min-height:44px;margin-top:10px;border:1px solid var(--c-border-strong);border-radius:8px;background:var(--c-bg);color:var(--c-text);font:inherit;cursor:pointer}
+#lock-retry.show{display:block}
+.lk-msg{min-height:1.7em;margin:12px 0 0;font-size:12.5px;color:var(--c-muted)}
+.lk-msg.bad{color:var(--c-red)}
+:where(#lock-pass,#lock-go,#lock-retry,.lk-rem input,a):focus-visible{outline:2px solid var(--c-primary);outline-offset:2px}
+#gsi-box{min-height:44px;margin:0 0 6px}
+.lk-fb{margin:12px 0 0;font-size:12px;color:var(--c-muted)}
+.lk-fb>summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
+#gsi-box[hidden],#pw-box[hidden],#lock-go[hidden]{display:none}
+.apiwrap{max-width:1100px;margin:0 auto;padding:20px 16px 48px}
+.apiwrap h1{font-size:18px;margin:0 0 6px}
+.apiwrap p{font-size:12.5px;color:var(--c-muted);margin:0 0 12px}
+.apiwrap a{color:var(--c-primary)}
+.apiraw{background:var(--c-code-bg);border:1px solid var(--c-border);border-radius:12px;padding:14px 16px;overflow:auto;max-height:78vh;font-family:var(--font-mono);font-size:12px;line-height:1.55;margin:0}
+code{font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<div id="boot">読み込んでいます…</div>
+<div id="lock" hidden="hidden">
+  <form id="lock-form" class="lk-card" autocomplete="off">
+    <svg class="lk-gauge" viewBox="0 0 120 66" aria-hidden="true"><path d="M10 60 A50 50 0 0 1 110 60" fill="none" stroke="var(--c-border-strong)" stroke-opacity=".45" stroke-width="10" stroke-linecap="round"/><path d="M10 60 A50 50 0 0 1 60 10" fill="none" stroke="var(--c-primary)" stroke-width="10" stroke-linecap="round"/><line x1="60" y1="60" x2="88" y2="26" stroke="var(--c-primary)" stroke-width="3" stroke-linecap="round"/><circle cx="60" cy="60" r="5" fill="var(--c-primary)"/></svg>
+    <h1>Billing Dashboard</h1>
+    <p class="lk-lead" id="lock-lead">課金と無料枠のデータは暗号化して置いてあります。パスフレーズを入れると、この端末の中で復号して表示します。</p>
+    <div id="gsi-box" hidden="hidden"><div id="gsi-btn"></div>
+      <details id="pw-fallback" class="lk-fb"><summary>Google でログインできないとき（管理用）</summary></details>
+    </div>
+    <div id="pw-box">
+    <label for="lock-pass">パスフレーズ</label>
+    <input id="lock-pass" type="password" autocomplete="current-password" spellcheck="false" aria-describedby="lock-msg" />
+    </div>
+    <label class="lk-rem"><input id="lock-remember" type="checkbox" /> この端末で記憶する</label>
+    <p class="lk-note">共有の端末では選ばないでください。選ばない場合も 30 分間は再入力なしで開けます。</p>
+    <button id="lock-go" type="submit">開く</button>
+    <p id="lock-msg" class="lk-msg" aria-live="polite"></p>
+    <button id="lock-retry" type="button">再読み込み</button>
+  </form>
+</div>
+<script>
+// PAGES-CRYPTO-BEGIN（純関数のみ・tests/test_pages.py が node で実行する＝production コードそのものを検証）
+const PG_MIN_ITER = 600000;
+const pgB64d = (s)=>Uint8Array.from(atob(s), c=>c.charCodeAt(0));
+function pgCheckEnv(env){
+  if(!env||env.v!==1||env.kdf!=='PBKDF2-SHA256'||!(env.iter>=PG_MIN_ITER)||!env.salt||!env.iv||!env.ct) throw new Error('unsupported envelope');
+  return env;
+}
+// 鍵は取り出せない形（extractable=false）で作る。保存しても生の鍵バイトは JS から読めない
+async function pgDeriveKey(pass, env){
+  pgCheckEnv(env);
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2', hash:'SHA-256', salt:pgB64d(env.salt), iterations:env.iter},
+    base, {name:'AES-GCM', length:256}, false, ['decrypt']);
+}
+async function pgDecrypt(key, env){
+  pgCheckEnv(env);
+  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:pgB64d(env.iv)}, key, pgB64d(env.ct));
+  return new TextDecoder().decode(pt);
+}
+// BD-072: 鍵サーバーが返した生鍵（base64）を取り出せない鍵として取り込む
+async function pgImportRawKey(b64){
+  const raw = pgB64d(b64);
+  if(raw.length !== 32) throw new Error('bad key');
+  return crypto.subtle.importKey('raw', raw, {name:'AES-GCM'}, false, ['decrypt']);
+}
+function pgLoginMode(clientId, keyApi){
+  return /^[0-9]{6,20}-[a-z0-9]{10,64}\.apps\.googleusercontent\.com$/.test(clientId||'') && /^https:\/\/[a-z0-9.-]+\.run\.app$/.test(keyApi||'');
+}
+// BD-072: ID トークンを鍵サーバーへ送り、返った生鍵で復号する（fetch を引数で受ける＝テストで偽の fetch を通せる）
+async function pgLoginExchange(fetchFn, keyApi, credential, env){
+  if(!credential) throw new Error('no credential');
+  const r = await fetchFn(keyApi, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({credential}), cache:'no-store', credentials:'omit'});
+  if(!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json();
+  const key = await pgImportRawKey(j && j.key);
+  return {key, text: await pgDecrypt(key, env)};
+}
+function pgRoute(search){
+  const q = new URLSearchParams(search||'');
+  if(q.has('doc')) return {kind:'doc', name:(q.get('doc')||'').replace(/[^a-z0-9_-]/g,'')||'index'};
+  if(q.has('api')) return {kind:'api', name:(q.get('api')||'').replace(/[^a-z_]/g,'')||'index'};
+  return {kind:'dash', name:''};
+}
+function pgPath(r){ return r.kind==='doc' ? 'docs/'+r.name+'.html.enc' : r.kind==='api' ? 'api/'+r.name+'.json.enc' : 'app.enc'; }
+// 復号した HTML へ「Pages で開いている」印と施錠の手段を差し込む（本体の DOCS/API リンク・鍵ボタンが使う）
+function pgMark(html){
+  const tag = '<script>window.__BD_MODE="pages";window.__bdLock=function(){try{indexedDB.deleteDatabase("bd-pages")}catch(e){}location.href="./#locked"};<\/script>';
+  const i = html.search(/<head[^>]*>/i);
+  if(i < 0) return tag + html;
+  const j = html.indexOf('>', i) + 1;
+  return html.slice(0, j) + tag + html.slice(j);
+}
+// PAGES-CRYPTO-END
+(function(){
+  // BD-072: bd.py が registry/pages.yaml の値を差し込む。両方そろえば Google ログイン、無ければパスフレーズ
+  const BD_CLIENT_ID = '801187761233-0rnh43ti2oltlk2qm60hsfmu2h350jgb.apps.googleusercontent.com', BD_KEY_API = 'https://bd-pages-key-bnpk5g4dja-an.a.run.app';
+  const LOGIN = pgLoginMode(BD_CLIENT_ID, BD_KEY_API);
+  const route = pgRoute(location.search);
+  const SESSION_MS = 30 * 60 * 1000;
+  // 鍵の保管: IndexedDB に CryptoKey（extractable=false）をそのまま置く。記憶しない場合は 30 分で失効
+  const db = ()=>new Promise((ok, ng)=>{ const r = indexedDB.open('bd-pages', 1);
+    r.onupgradeneeded = ()=>r.result.createObjectStore('k'); r.onsuccess = ()=>ok(r.result); r.onerror = ()=>ng(r.error); });
+  const tx = async (mode, fn)=>{ const d = await db(); try { return await new Promise((ok, ng)=>{ const t = d.transaction('k', mode);
+    const req = fn(t.objectStore('k')); t.oncomplete = ()=>ok(req && req.result); t.onerror = ()=>ng(t.error); }); } finally { d.close(); } };
+  const store = {
+    async get(salt){ try { const v = await tx('readonly', s=>s.get('key'));
+      if(!v || v.salt !== salt || (v.exp && v.exp < Date.now())){ if(v) await store.clear(); return null; } return v.key; } catch(e){ return null; } },
+    async put(key, salt, remember){ try { await tx('readwrite', s=>s.put({key, salt, exp: remember ? null : Date.now() + SESSION_MS}, 'key')); } catch(e){} },
+    async clear(){ try { await tx('readwrite', s=>s.delete('key')); } catch(e){} }
+  };
+  const boot = document.getElementById('boot'), lock = document.getElementById('lock');
+  const form = document.getElementById('lock-form'), inp = document.getElementById('lock-pass');
+  const msg = document.getElementById('lock-msg'), btn = document.getElementById('lock-go'), rem = document.getElementById('lock-remember');
+  const retry = document.getElementById('lock-retry');
+  const say = (t, bad)=>{ msg.textContent = t; msg.className = bad ? 'lk-msg bad' : 'lk-msg';
+    if(bad) msg.setAttribute('role','alert'); else msg.removeAttribute('role');
+    inp.setAttribute('aria-invalid', bad ? 'true' : 'false'); };
+  const busy = (on)=>{ btn.disabled = on; btn.textContent = on ? '復号しています…' : '開く'; form.setAttribute('aria-busy', on ? 'true' : 'false'); };
+  retry.addEventListener('click', ()=>location.reload());
+
+  function render(text){
+    if(route.kind === 'api'){
+      let pretty = text; try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch(e){}
+      boot.hidden = true; lock.hidden = true;
+      const w = document.createElement('main'); w.className = 'apiwrap';
+      w.innerHTML = '<h1>API: <code></code></h1><p>復号した JSON。機械から読むときは端末で <code>python -X utf8 bd.py api &lt;name&gt;</code>。 <a href="./">ダッシュボードへ戻る</a></p><pre class="apiraw"></pre>';
+      w.querySelector('h1 code').textContent = route.name; w.querySelector('pre').textContent = pretty;
+      document.body.appendChild(w); return;
+    }
+    document.open(); document.write(pgMark(text)); document.close();     // ダッシュボード本体・ドキュメントは復号した HTML そのもの
+  }
+  function showLock(){ boot.hidden = true; lock.hidden = false; if(!LOGIN) setTimeout(()=>inp.focus(), 0); }
+  // Google ログイン: ID トークンを鍵サーバーへ送り、生鍵を受け取って復号する（鍵サーバーが Google アカウントを確かめる）
+  function startGoogle(env){
+    document.getElementById('lock-lead').textContent = '課金と無料枠のデータは暗号化して置いてあります。Google アカウントでログインすると、この端末の中で復号して表示します。';
+    document.getElementById('pw-box').hidden = true; btn.hidden = true;
+    const fb = document.getElementById('pw-fallback');
+    fb.addEventListener('toggle', ()=>{ if(!fb.open) return;                 // 開いたときだけパスフレーズ欄を出す
+      document.getElementById('pw-box').hidden = false; btn.hidden = false; fb.hidden = true; pwSubmit(env); inp.focus(); }, {once:true});
+    const box = document.getElementById('gsi-box'); box.hidden = false;
+    async function onCred(resp){
+      say('ログインを確かめています…', false);
+      try {
+        const {key, text} = await pgLoginExchange(fetch.bind(window), BD_KEY_API, resp && resp.credential, env);
+        await store.put(key, env.salt, rem.checked);
+        render(text);
+      } catch(e){ say('ログインを確かめられませんでした（' + e.message + '）。もう一度ボタンを押してください。', true); }
+    }
+    const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+    s.onload = ()=>{
+      const locked = location.hash === '#locked';
+      google.accounts.id.initialize({client_id: BD_CLIENT_ID, callback: onCred, auto_select: !locked, use_fedcm_for_prompt: true, ux_mode: 'popup'});
+      if(locked) google.accounts.id.disableAutoSelect();
+      google.accounts.id.renderButton(document.getElementById('gsi-btn'), {theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'filled_black' : 'outline', size: 'large', text: 'signin_with', shape: 'rectangular', locale: 'ja', width: 300});
+      google.accounts.id.prompt();
+    };
+    s.onerror = ()=>{ say('Google のログイン部品を読み込めませんでした。通信を確かめて再読み込みしてください。', true); retry.classList.add('show'); };
+    document.head.appendChild(s);
+  }
+
+  (async ()=>{
+    let env;
+    try { const r = await fetch(pgPath(route), {cache:'no-store'}); if(!r.ok) throw new Error('HTTP ' + r.status); env = await r.json(); }
+    catch(e){ showLock(); btn.disabled = true; retry.classList.add('show');
+      say(route.kind === 'dash' ? 'データを取得できませんでした（' + e.message + '）。時間をおいて再読み込みしてください。' : '指定のページは見つかりません（' + e.message + '）。', true); return; }
+    const cached = await store.get(env.salt);
+    if(cached){
+      try { render(await pgDecrypt(cached, env)); return; }
+      catch(e){ await store.clear(); }                 // 鍵が替わった（パスフレーズ更新）＝もう一度入力してもらう
+    }
+    showLock();
+    if(LOGIN){ startGoogle(env); return; }
+    pwSubmit(env);
+  })();
+  function pwSubmit(env){
+    form.addEventListener('submit', async (ev)=>{
+      ev.preventDefault();
+      if(!inp.value.trim()){ say('パスフレーズを入力してください。', true); return; }
+      busy(true); say('この端末で鍵を作って復号しています（数秒かかります）。', false);
+      try {
+        const key = await pgDeriveKey(inp.value.trim(), env);
+        const text = await pgDecrypt(key, env);
+        await store.put(key, env.salt, rem.checked);
+        inp.value = '';
+        render(text);
+      } catch(e){
+        busy(false); say('パスフレーズが違います。入力し直してください。', true); inp.select();
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>
